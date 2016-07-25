@@ -1,6 +1,6 @@
 var async = require('async')
 var stdin = process.openStdin();
-var PokemonGO = require('./api/poke.io.js');
+var PokemonGO = require('./lib/poke.io.js');
 
 var client = new PokemonGO.Pokeio();
 
@@ -9,7 +9,7 @@ var initialized = false;
 
 var location = {
     'type': 'name',
-    'name': 'Fremont'
+    'name': 'Oakland'
 };
 
 var nearbyPokemons = [];
@@ -288,7 +288,7 @@ function showInventory(inputArgs) {
                 }
             }
         } else if (itemList === 'items') {
-            
+
         }
 
         return ask();

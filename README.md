@@ -30,12 +30,7 @@ Catch that Pidgey!
 For more commands and help try `> help`
 
 ### Setup:
-1. `cd pokemon-go-cli`
-2. `npm install`
-3. `cd api`
-4. `npm install`
-5. `cd..`
-6. `node app.js`
+1. Do `npm install` at root of cloned repo folder.
 
 ### Warning:
 As usual, this utilizes un-official Niantic api, beware, you might get banned.
