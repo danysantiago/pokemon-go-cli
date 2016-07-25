@@ -36,4 +36,5 @@ For more commands and help try `> help`
 As usual, this utilizes un-official Niantic api, beware, you might get banned.
 
 ### Note:
-This interface was built on top of https://github.com/Armax/Pokemon-GO-node-api, thanks!
+* If your Google account has two-factor authentication, you will need to create an app password. See: https://support.google.com/accounts/answer/185833?hl=en.
+* This interface was built on top of https://github.com/Armax/Pokemon-GO-node-api, thanks!
