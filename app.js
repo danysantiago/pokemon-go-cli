@@ -90,11 +90,11 @@ function init(inputArgs) {
         console.log('[i] Current location: ' + client.playerInfo.locationName);
         console.log('[i] lat/long/alt: : ' + client.playerInfo.latitude + ' ' + client.playerInfo.longitude + ' ' + client.playerInfo.altitude);
     
-        ask();
+        return ask();
     });
 }
 
-function showProflile(inputArgs) {
+function showProfile(inputArgs) {
     if (!initialized) {
         console.log("[e] Error getting profile.");
         console.log("Client not initialized.");
@@ -120,7 +120,7 @@ function showProflile(inputArgs) {
         console.log('[i] Pokecoin: ' + poke);
         console.log('[i] Stardust: ' + profile.currency[1].amount);
 
-        ask();
+        return ask();
     });
 }
 
@@ -256,8 +256,43 @@ function capture(inputArgs) {
 }
 
 function showInventory(inputArgs) {
-    console.log("Sorry - Not yet implemented.");
-    return ask();
+    if (!initialized) {
+        console.log("[e] Error getting invenotry.");
+        console.log("Client not initialized.");
+        return ask();
+    }
+
+    if (inputArgs.length < 2) {
+        console.log("[e] Error getting invenotry.");
+        console.log("List not specify. Try 'inventory pokemons'.");
+        return ask();
+    }
+
+    var itemList = inputArgs[1];
+
+    client.GetInventory(function (err, inventory) {
+        if (err) {
+            console.log("[e] Error getting profile.");
+            console.log(err);
+            return ask();
+        }
+
+        if (itemList === 'pokemons') {
+            console.log("[i] You have the following Pokemons:");
+            var itemArr = inventory.inventory_delta.inventory_items;
+            for (var i = 0; i < itemArr.length; i++) {
+                var item = itemArr[i].inventory_item_data;
+                if (item.pokemon) {
+                    var pokedexInfo = client.pokemonlist[parseInt(item.pokemon.pokemon_id)-1];
+                    console.log("[i] " + pokedexInfo.name + ", CP:" + item.pokemon.cp);
+                }
+            }
+        } else if (itemList === 'items') {
+            
+        }
+
+        return ask();
+    });
 }
 
 function help(inputArgs) {
