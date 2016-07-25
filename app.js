@@ -48,6 +48,14 @@ stdin.addListener("data", function (input) {
         return capture(inputArgs);
     }
 
+    if (cmd === "inventory") {
+        return showInventory(inputArgs);
+    }
+
+    if (cmd === "help") {
+        return help(inputArgs);
+    }
+
     console.log("[i] Unknown command.");
     return ask();
 });
@@ -245,4 +253,20 @@ function capture(inputArgs) {
 
         return ask();
     });
+}
+
+function showInventory(inputArgs) {
+    console.log("Sorry - Not yet implemented.");
+    return ask();
+}
+
+function help(inputArgs) {
+    console.log("Available commands:");
+    console.log("  init <USERNAME> <PASSWORD> <'ptc'|'google'> - Initializes client.");
+    console.log("  scan - Scan for nearby Pokemons. Catchable Pokemons will contain an index to use with the catch command.");
+    console.log("  scan <LATITUDE>,<LONGITUDE> - Move and scan for Pokemons at the given coordinates.");
+    console.log("  catch <INDEX> - Tries to capture previously seen nearby Pokemon while scanning.");
+    console.log("  profile - Displays user profile information.");
+    console.log("  inventory - Displays user inventory.");
+    return ask();
 }
