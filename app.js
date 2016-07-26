@@ -1,4 +1,7 @@
-var async = require('async')
+var async = require('async');
+var _ = require('underscore');
+var Int64 = require('node-int64');
+var Table = require('cli-table');
 var stdin = process.openStdin();
 var PokemonGO = require('./lib/poke.io.js');
 
@@ -9,7 +12,7 @@ var initialized = false;
 
 var location = {
     'type': 'name',
-    'name': 'Oakland'
+    'name': 'Fremont'
 };
 
 var nearbyPokemons = [];
@@ -272,23 +275,70 @@ function showInventory(inputArgs) {
 
     client.GetInventory(function (err, inventory) {
         if (err) {
-            console.log("[e] Error getting profile.");
+            console.log("[e] Error getting inventory.");
             console.log(err);
             return ask();
         }
 
+        var itemArr = inventory.inventory_delta.inventory_items;
+        var pokemons = [];
+        var items = [];
+        var candies = [];
+        var pokedexEntries = []
+        _.each(itemArr, function (element) {
+            var data = element.inventory_item_data;
+            if (data.pokemon && data.pokemon.pokemon_id) {
+                pokemons.push(data.pokemon);
+            } else if (data.item) {
+                items.push(data.item);
+            }
+        });
+
         if (itemList === 'pokemons') {
-            console.log("[i] You have the following Pokemons:");
-            var itemArr = inventory.inventory_delta.inventory_items;
-            for (var i = 0; i < itemArr.length; i++) {
-                var item = itemArr[i].inventory_item_data;
-                if (item.pokemon) {
-                    var pokedexInfo = client.pokemonlist[parseInt(item.pokemon.pokemon_id)-1];
-                    console.log("[i] " + pokedexInfo.name + ", CP:" + item.pokemon.cp);
+            if (inputArgs[2] === "sort") {
+                if (inputArgs[3] === "cp") {
+                    pokemons = _.sortBy(pokemons, 'cp');
+                } else if (inputArgs[3] === "#") {
+                    pokemons = _.sortBy(pokemons, 'pokemon_id');
+                } else if (inputArgs[3] === "name") {
+                    pokemons = _.sortBy(pokemons, function (element) {
+                        var pokedexInfo = client.pokemonlist[parseInt(element.pokemon_id)-1];
+                        return pokedexInfo.name;
+                    });
+                } else if (inputArgs[3] === "recent") {
+                    pokemons = _.sortBy(pokemons, function (element) {
+                        var timeObj = element.creation_time_ms;
+                        var int64 = new Int64(timeObj.high, timeObj.low);
+                        return int64.toNumber();
+                    });
                 }
             }
-        } else if (itemList === 'items') {
 
+            console.log("[i] You have the following Pokemons:");
+            var table = new Table({
+                    head: ['#', 'Name', 'CP', 'Capture Date']
+                  , colWidths: [5, 14, 6, 42]
+            });
+            _.each(pokemons, function (pokemon) {
+                var pokedexInfo = client.pokemonlist[parseInt(pokemon.pokemon_id)-1];
+                var timeObj = pokemon.creation_time_ms;
+                var int64 = new Int64(timeObj.high, timeObj.low);
+                var captureDate = new Date(int64.toNumber());
+                table.push([pokedexInfo.num, pokedexInfo.name, pokemon.cp, captureDate]);
+            });
+            console.log(table.toString());
+        } else if (itemList === 'items') {
+            console.log("[i] You have the following Items:");
+            var table = new Table({
+                    head: ['Name', 'Count']
+                  , colWidths: [28, 8]
+            });
+            _.each(items, function (item) {
+                table.push([client.itemMap[item.item].name, item.count]);
+            });
+            console.log(table.toString());
+        } else {
+            console.log("[i] Unknown inventory list. Try 'inventory pokemons'");
         }
 
         return ask();
@@ -302,6 +352,6 @@ function help(inputArgs) {
     console.log("  scan <LATITUDE>,<LONGITUDE> - Move and scan for Pokemons at the given coordinates.");
     console.log("  catch <INDEX> - Tries to capture previously seen nearby Pokemon while scanning.");
     console.log("  profile - Displays user profile information.");
-    console.log("  inventory - Displays user inventory.");
+    console.log("  inventory <'pokemons'|'items'> - Displays user Pokemons or Items. You can sort the Pokemon list by utiling the 'sort' param and one of the followings: '#', 'cp', 'name' or 'recent'.");
     return ask();
 }
