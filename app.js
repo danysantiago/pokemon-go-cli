@@ -183,7 +183,7 @@ function capture(inputArgs, done) {
         return done();
     }
 
-    var index = inputArgs[1];
+    var index = inputArgs.index;
     if (index < 0 || index >= nearbyPokemons.length) {
         console.log("[e] Error catching pokemon.");
         console.log("Invalid pokemon index.");
