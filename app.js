@@ -1,3 +1,4 @@
+var vorpal = require('vorpal')();
 var async = require('async');
 var _ = require('underscore');
 var Int64 = require('node-int64');
@@ -12,103 +13,81 @@ var initialized = false;
 
 var location = {
     'type': 'name',
-    'name': 'Fremont'
+    'name': 'Oakland'
 };
 
 var nearbyPokemons = [];
 
 console.log("Welcome to PokemonGO CLI!");
-ask();
 
-stdin.addListener("data", function (input) {
-    var inputStr = input.toString().trim();
+vorpal
+    .command("init <username> <password> <provider> [initLocation]")
+    .description('Initializes client.')
+    .action(init);
 
-    if (debug) {
-        console.log("[d] input entered: [" + inputStr + "]");
-    }
+vorpal
+    .command("scan [lat_lon]")
+    .description("Scan for nearby Pokemons. Catchable Pokemons will contain an index to use with the catch command.")
+    .action(scan);
 
-    var inputArgs = inputStr.split(' ');
-    if (inputArgs.length === 0) {
-        console.log("[i] Unknown command.");
-        return ask();
-    }
+vorpal
+    .command("catch [index]")
+    .description("Tries to capture previously seen nearby Pokemon while scanning.")
+    .action(capture);
 
-    var cmd = inputArgs[0];
+vorpal
+    .command("inventory <list> [sortBy]")
+    .description("Displays user Pokemons or Items. You can sort the Pokemon list by utiling the 'sortBy' param and one of the followings: '#', 'cp', 'name' or 'recent'.")
+    .action(showInventory);
 
-    if (cmd === "init") {
-        return init(inputArgs);
-    }
+vorpal
+    .command("profile")
+    .description("Displays user profile information.")
+    .action(showProfile);
 
-    if (cmd === "profile") {
-        return showProfile(inputArgs);
-    }
+vorpal
+    .delimiter('>')
+    .show();
 
-    if (cmd === "scan") {
-        return scan(inputArgs);
-    }
+function init(inputArgs, done) {
+    var username = inputArgs.username;
+    var password = inputArgs.password;
+    var provider = inputArgs.provider;
 
-    if (cmd === "catch") {
-        return capture(inputArgs);
-    }
-
-    if (cmd === "inventory") {
-        return showInventory(inputArgs);
-    }
-
-    if (cmd === "help") {
-        return help(inputArgs);
-    }
-
-    console.log("[i] Unknown command.");
-    return ask();
-});
-
-function ask() {
-    process.stdout.write("> ");
-}
-
-function init(inputArgs) {
-    var username;
-    var password;
-    var provider;
-
-    try {
-        username = inputArgs[1];
-        password = inputArgs[2];
-        provider = inputArgs[3];
-    } catch (err) {
-        console.log('[e] Error parsing init arguments');
-        console.log(err);
-        return ask();
+    if (inputArgs.initLocation) {
+        location = {
+            'type': 'name',
+            'name': inputArgs.initLocation
+        };
     }
 
     client.init(username, password, location, provider, function (err) {
         if (err) {
             console.log("[e] Error initializing.");
-            console.log(err);
-            return ask();
+            console.log(JSON.stringify(err));
+            return done();
         }
 
         initialized = true;
         console.log('[i] Current location: ' + client.playerInfo.locationName);
         console.log('[i] lat/long/alt: : ' + client.playerInfo.latitude + ' ' + client.playerInfo.longitude + ' ' + client.playerInfo.altitude);
     
-        return ask();
+        return done();
     });
 }
 
-function showProfile(inputArgs) {
+function showProfile(inputArgs, done) {
     if (!initialized) {
         console.log("[e] Error getting profile.");
         console.log("Client not initialized.");
-        return ask();
+        return done();
     }
 
     client.GetProfile(function (err, profile) {
         if (err) {
             console.log("[e] Error getting profile.");
             console.log(err);
-            return ask();
+            return done();
         }
 
         console.log('[i] Username: ' + profile.username);
@@ -123,25 +102,25 @@ function showProfile(inputArgs) {
         console.log('[i] Pokecoin: ' + poke);
         console.log('[i] Stardust: ' + profile.currency[1].amount);
 
-        return ask();
+        return done();
     });
 }
 
-function scan(inputArgs) {
+function scan(inputArgs, done) {
     if (!initialized) {
         console.log("[e] Error scanning.");
         console.log("Client not initialized.");
-        return ask();
+        return done();
     }
 
     async.waterfall([
         function (callback) {
-            if (inputArgs.length < 2) {
+            if (!('lat_lon' in inputArgs)) {
                 return callback(null, location);;
             }
 
             try {
-                var commaSplit = inputArgs[1].split(',');
+                var commaSplit = inputArgs.lat_lon.split(',');
                 var latitude = commaSplit[0].trim();
                 var longitude = commaSplit[1].trim();
                 location = {
@@ -193,22 +172,22 @@ function scan(inputArgs) {
             console.log(err);
         }
 
-        return ask();
+        return done();
     });
 }
 
-function capture(inputArgs) {
+function capture(inputArgs, done) {
     if (!initialized) {
         console.log("[e] Error catching pokemon.");
         console.log("Client not initialized.");
-        return ask();
+        return done();
     }
 
     var index = inputArgs[1];
     if (index < 0 || index >= nearbyPokemons.length) {
         console.log("[e] Error catching pokemon.");
         console.log("Invalid pokemon index.");
-        return ask();
+        return done();
     }
 
     var pokemonToCatch = nearbyPokemons[index].pokemon;
@@ -232,6 +211,7 @@ function capture(inputArgs) {
         },
         client.EncounterPokemon,
         function (encounterData, callback) {
+            // TODO: Do some error handling here, See EncounterResponse in pokemon.proto
             console.log('[i] Encountering pokemon ' + pokemonToCatchInfo.name + '...');
 
             async.doUntil(
@@ -254,30 +234,24 @@ function capture(inputArgs) {
             console.log(err);
         }
 
-        return ask();
+        return done();
     });
 }
 
-function showInventory(inputArgs) {
+function showInventory(inputArgs, done) {
     if (!initialized) {
         console.log("[e] Error getting invenotry.");
         console.log("Client not initialized.");
-        return ask();
+        return done();
     }
 
-    if (inputArgs.length < 2) {
-        console.log("[e] Error getting invenotry.");
-        console.log("List not specify. Try 'inventory pokemons'.");
-        return ask();
-    }
-
-    var itemList = inputArgs[1];
+    var itemList = inputArgs.list;
 
     client.GetInventory(function (err, inventory) {
         if (err) {
             console.log("[e] Error getting inventory.");
             console.log(err);
-            return ask();
+            return done();
         }
 
         var itemArr = inventory.inventory_delta.inventory_items;
@@ -285,33 +259,35 @@ function showInventory(inputArgs) {
         var items = [];
         var candies = [];
         var pokedexEntries = []
+        var playerStats;
         _.each(itemArr, function (element) {
             var data = element.inventory_item_data;
-            if (data.pokemon && data.pokemon.pokemon_id) {
+            if (data.pokemon && !data.pokemon.is_egg) {
                 pokemons.push(data.pokemon);
             } else if (data.item) {
                 items.push(data.item);
+            } else if (data.player_stats) {
+                playerStats = data.player_stats;
             }
         });
 
         if (itemList === 'pokemons') {
-            if (inputArgs[2] === "sort") {
-                if (inputArgs[3] === "cp") {
-                    pokemons = _.sortBy(pokemons, 'cp');
-                } else if (inputArgs[3] === "#") {
-                    pokemons = _.sortBy(pokemons, 'pokemon_id');
-                } else if (inputArgs[3] === "name") {
-                    pokemons = _.sortBy(pokemons, function (element) {
-                        var pokedexInfo = client.pokemonlist[parseInt(element.pokemon_id)-1];
-                        return pokedexInfo.name;
-                    });
-                } else if (inputArgs[3] === "recent") {
-                    pokemons = _.sortBy(pokemons, function (element) {
-                        var timeObj = element.creation_time_ms;
-                        var int64 = new Int64(timeObj.high, timeObj.low);
-                        return int64.toNumber();
-                    });
-                }
+            var sortBy = inputArgs.sortBy;
+            if (sortBy === "cp") {
+                pokemons = _.sortBy(pokemons, 'cp');
+            } else if (sortBy === "#") {
+                pokemons = _.sortBy(pokemons, 'pokemon_id');
+            } else if (sortBy === "name") {
+                pokemons = _.sortBy(pokemons, function (element) {
+                    var pokedexInfo = client.pokemonlist[parseInt(element.pokemon_id)-1];
+                    return pokedexInfo.name;
+                });
+            } else if (sortBy === "recent") {
+                pokemons = _.sortBy(pokemons, function (element) {
+                    var timeObj = element.creation_time_ms;
+                    var int64 = new Int64(timeObj.high, timeObj.low);
+                    return int64.toNumber();
+                });
             }
 
             console.log("[i] You have the following Pokemons:");
@@ -337,21 +313,17 @@ function showInventory(inputArgs) {
                 table.push([client.itemMap[item.item].name, item.count]);
             });
             console.log(table.toString());
+        } else if (itemList === 'stats') {
+            console.log("[i] Level " + playerStats.level);
+            var experience = new Int64(playerStats.experience.high, playerStats.experience.low);
+            var nextExperience = new Int64(playerStats.next_level_xp.high, playerStats.next_level_xp.low);
+            console.log("[i] XP " + experience + " / " + nextExperience);
+            console.log("[i] " + playerStats.unique_pokedex_entries + " Unique Pokedex Entries.");
+            console.log("[i] " + playerStats.pokemons_captured + " Pokemons captured.");
         } else {
             console.log("[i] Unknown inventory list. Try 'inventory pokemons'");
         }
 
-        return ask();
+        return done();
     });
-}
-
-function help(inputArgs) {
-    console.log("Available commands:");
-    console.log("  init <USERNAME> <PASSWORD> <'ptc'|'google'> - Initializes client.");
-    console.log("  scan - Scan for nearby Pokemons. Catchable Pokemons will contain an index to use with the catch command.");
-    console.log("  scan <LATITUDE>,<LONGITUDE> - Move and scan for Pokemons at the given coordinates.");
-    console.log("  catch <INDEX> - Tries to capture previously seen nearby Pokemon while scanning.");
-    console.log("  profile - Displays user profile information.");
-    console.log("  inventory <'pokemons'|'items'> - Displays user Pokemons or Items. You can sort the Pokemon list by utiling the 'sort' param and one of the followings: '#', 'cp', 'name' or 'recent'.");
-    return ask();
 }
