@@ -1,19 +1,20 @@
-var vorpal = require('vorpal')();
-var async = require('async');
-var _ = require('underscore');
-var Int64 = require('int64-native');
-var Table = require('cli-table');
-var yesno = require('yesno');
-var PokemonGO = require('./lib/poke.io.js');
+const vorpal = require('vorpal')();
+const async = require('async');
+const _ = require('underscore');
+const Int64 = require('int64-native');
+const Table = require('cli-table');
+const yesno = require('yesno');
+const opn = require('opn');
+const PokemonGO = require('./lib/poke.io.js');
 
-var client = new PokemonGO.Pokeio();
+const client = new PokemonGO.Pokeio();
 
 var debug = false;
 var initialized = false;
 
 var location = {
     'type': 'name',
-    'name': 'Fremont'
+    'name': 'Oakland'
 };
 
 var nearbyPokemons = [];
@@ -70,7 +71,8 @@ vorpal
 
 vorpal
     .command("inventory <list> [sortBy]")
-    .description("Displays user Pokemons or Items. You can sort the Pokemon list by utiling the 'sortBy' param and one of the followings: '#', 'cp', 'name' or 'recent'.")
+    .alias('inv')
+    .description("Displays user Pokemons, Items, Candies or Stats. You can sort the Pokemon list by utilizing the 'sortBy' param and one of the followings: '#', 'cp', 'name' or 'recent'.")
     .action(showInventory);
 
 vorpal
@@ -82,6 +84,11 @@ vorpal
     .command("profile")
     .description("Displays user profile information.")
     .action(showProfile);
+
+vorpal
+    .command("map")
+    .description("Opens PokeVision with the current location.")
+    .action(openMap);
 
 vorpal
     .delimiter('>')
@@ -121,7 +128,7 @@ function showProfile(inputArgs, done) {
     client.GetProfile(function (err, profile) {
         if (err) {
             console.log("[e] Error getting profile.");
-            console.log(err);
+            console.log(JSON.stringify(err));
             return done();
         }
 
@@ -198,7 +205,7 @@ function scan(inputArgs, done) {
     ], function (err) {
         if (err) {
             console.log("[e] Error scanning.");
-            console.log(err);
+            console.log(JSON.stringify(err));
         }
 
         return done();
@@ -254,7 +261,7 @@ function capture(inputArgs, done) {
     ], function (err) {
         if (err) {
             console.log("[e] Error catching scanning.");
-            console.log(err);
+            console.log(JSON.stringify(err));
         }
 
         return done();
@@ -267,7 +274,7 @@ function showInventory(inputArgs, done) {
     client.GetInventory(function (err, inventory) {
         if (err) {
             console.log("[e] Error getting inventory.");
-            console.log(err);
+            console.log(JSON.stringify(err));
             return done();
         }
 
@@ -388,7 +395,7 @@ function release(inputArgs, done) {
         client.ReleasePokemon(pokemonId.toUnsignedDecimalString(), function (err, releaseData) {
             if (err) {
                 console.log("[e] Error releasing pokemon.");
-                console.log(err);
+                console.log(JSON.stringify(err));
                 return done();
             }
 
@@ -397,4 +404,10 @@ function release(inputArgs, done) {
             return done();
         });
     });
+}
+
+function openMap(inputArgs, done) {
+    var url = "https://pokevision.com/#/@";
+    opn(url + client.playerInfo.latitude + ',' + client.playerInfo.longitude, {app: 'google chrome'});
+    return done();
 }

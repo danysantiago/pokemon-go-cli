@@ -12,6 +12,7 @@
     "async": "^2.0.1",
     "cli-table": "^0.3.1",
     "int64-native": "^0.4.0",
+    "opn": "^4.0.2",
     "underscore": "^1.8.3",
     "vorpal": "^1.11.2",
     "yesno": "0.0.1"
