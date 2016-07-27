@@ -4,7 +4,10 @@
 Initialize by logging in with your Pokemon Trainer Club or Google account.
 ```
 Welcome to PokemonGO CLI!
-> init <USERNAME> <PASSWORD> <'ptc'|'google'> 
+>
+Account Type ('google'|'ptc'): ptc
+Username: MY_USERNAME
+Password: ***********
 ```
 Use the scan command to look for nearby Pokemons.
 ```
