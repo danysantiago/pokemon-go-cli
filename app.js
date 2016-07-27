@@ -13,7 +13,7 @@ var initialized = false;
 
 var location = {
     'type': 'name',
-    'name': 'Oakland'
+    'name': 'Fremont'
 };
 
 var nearbyPokemons = [];
@@ -286,6 +286,8 @@ function showInventory(inputArgs, done) {
                 items.push(data.item);
             } else if (data.player_stats) {
                 playerStats = data.player_stats;
+            } else if (data.pokemon_family) {
+                candies.push(data.pokemon_family);
             }
         });
 
@@ -310,8 +312,8 @@ function showInventory(inputArgs, done) {
 
             console.log("[i] You have the following Pokemons:");
             var table = new Table({
-                    head: ['i', '#', 'Name', 'CP', 'Capture Date']
-                  , colWidths: [5, 5, 14, 6, 42]
+                head: ['i', '#', 'Name', 'CP', 'Capture Date'],
+                colWidths: [5, 5, 14, 6, 42]
             });
             _.each(pokemons, function (pokemon, index) {
                 var pokedexInfo = client.pokemonlist[parseInt(pokemon.pokemon_id)-1];
@@ -324,11 +326,13 @@ function showInventory(inputArgs, done) {
         } else if (itemList === 'items') {
             console.log("[i] You have the following Items:");
             var table = new Table({
-                    head: ['Name', 'Count']
-                  , colWidths: [28, 8]
+                head: ['Name', 'Count'],
+                colWidths: [28, 8]
             });
             _.each(items, function (item) {
-                table.push([client.itemMap[item.item].name, item.count]);
+                if (item.count) {
+                    table.push([client.itemMap[item.item].name, item.count]);
+                }
             });
             console.log(table.toString());
         } else if (itemList === 'stats') {
@@ -338,6 +342,19 @@ function showInventory(inputArgs, done) {
             console.log("[i] XP " + experience + " / " + nextExperience);
             console.log("[i] " + playerStats.unique_pokedex_entries + " Unique Pokedex Entries.");
             console.log("[i] " + playerStats.pokemons_captured + " Pokemons captured.");
+        } else if (itemList === 'candies') {
+            candies = _.sortBy(candies, 'family_id');
+
+            console.log("[i] You have the following Candy:");
+            var table = new Table({
+                head: ['Name', 'Count'],
+                colWidths: [28, 8]
+            });
+            _.each(candies, function (candy) {
+                var pokedexInfo = client.pokemonlist[parseInt(candy.family_id)-1];
+                table.push([pokedexInfo.name, candy.candy]);
+            });
+            console.log(table.toString());
         } else {
             console.log("[i] Unknown inventory list. Try 'inventory pokemons'");
         }
@@ -375,6 +392,7 @@ function release(inputArgs, done) {
                 return done();
             }
 
+            //TODO: Do status handling here. See ReleasePokemonResponse in pokemon.proto
             console.log("[i] Bye bye " + pokedexInfo.name + "...");
             return done();
         });
