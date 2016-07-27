@@ -1,9 +1,9 @@
 var vorpal = require('vorpal')();
 var async = require('async');
 var _ = require('underscore');
-var Int64 = require('node-int64');
+var Int64 = require('int64-native');
 var Table = require('cli-table');
-var stdin = process.openStdin();
+var yesno = require('yesno');
 var PokemonGO = require('./lib/poke.io.js');
 
 var client = new PokemonGO.Pokeio();
@@ -17,13 +17,46 @@ var location = {
 };
 
 var nearbyPokemons = [];
+var pokemons = [];
+var items = [];
+var candies = [];
+var pokedexEntries = []
+var playerStats;
 
 console.log("Welcome to PokemonGO CLI!");
 
 vorpal
-    .command("init <username> <password> <provider> [initLocation]")
-    .description('Initializes client.')
-    .action(init);
+    .command("init")
+    .action(function (inputArgs, done) {
+        var that = this;
+        async.doUntil(function (doUntilFnCallback) {
+            that.prompt([
+                {
+                    type: 'input',
+                    name: 'provider',
+                    message: "Account Type ('google'|'ptc'): "
+                },
+                {
+                    type: 'input',
+                    name: 'username',
+                    message: 'Username: '
+                },
+                {
+                    type: 'password',
+                    name: 'password',
+                    message: 'Password: '
+                }
+            ], init(doUntilFnCallback));
+        }, function (success) {
+            if (!success) {
+                console.log("[e] Oops, something went wrong, try again.");
+            }
+            return success;
+        }, function() {
+            return done();
+        })
+    })
+    .hidden();
 
 vorpal
     .command("scan [lat_lon]")
@@ -41,48 +74,50 @@ vorpal
     .action(showInventory);
 
 vorpal
+    .command("release [index]")
+    .description("Transfers a Pokemon for candy.")
+    .action(release);
+
+vorpal
     .command("profile")
     .description("Displays user profile information.")
     .action(showProfile);
 
 vorpal
     .delimiter('>')
-    .show();
+    .show()
+    .exec('init');
 
-function init(inputArgs, done) {
-    var username = inputArgs.username;
-    var password = inputArgs.password;
-    var provider = inputArgs.provider;
+function init(success) {
+    return function (inputArgs) {
+        var username = inputArgs.username;
+        var password = inputArgs.password;
+        var provider = inputArgs.provider;
 
-    if (inputArgs.initLocation) {
-        location = {
-            'type': 'name',
-            'name': inputArgs.initLocation
-        };
-    }
-
-    client.init(username, password, location, provider, function (err) {
-        if (err) {
-            console.log("[e] Error initializing.");
-            console.log(JSON.stringify(err));
-            return done();
+        if (inputArgs.initLocation) {
+            location = {
+                'type': 'name',
+                'name': inputArgs.initLocation
+            };
         }
 
-        initialized = true;
-        console.log('[i] Current location: ' + client.playerInfo.locationName);
-        console.log('[i] lat/long/alt: : ' + client.playerInfo.latitude + ' ' + client.playerInfo.longitude + ' ' + client.playerInfo.altitude);
-    
-        return done();
-    });
+        client.init(username, password, location, provider, function (err) {
+            if (err) {
+                // console.log("[e] Error initializing.");
+                // console.log(JSON.stringify(err));
+                return success(null, false);
+            }
+
+            initialized = true;
+            console.log('[i] Current location: ' + client.playerInfo.locationName);
+            console.log('[i] lat/long/alt: : ' + client.playerInfo.latitude + ' ' + client.playerInfo.longitude + ' ' + client.playerInfo.altitude);
+        
+            return success(null, true);
+        });
+    }
 }
 
 function showProfile(inputArgs, done) {
-    if (!initialized) {
-        console.log("[e] Error getting profile.");
-        console.log("Client not initialized.");
-        return done();
-    }
-
     client.GetProfile(function (err, profile) {
         if (err) {
             console.log("[e] Error getting profile.");
@@ -107,12 +142,6 @@ function showProfile(inputArgs, done) {
 }
 
 function scan(inputArgs, done) {
-    if (!initialized) {
-        console.log("[e] Error scanning.");
-        console.log("Client not initialized.");
-        return done();
-    }
-
     async.waterfall([
         function (callback) {
             if (!('lat_lon' in inputArgs)) {
@@ -177,13 +206,7 @@ function scan(inputArgs, done) {
 }
 
 function capture(inputArgs, done) {
-    if (!initialized) {
-        console.log("[e] Error catching pokemon.");
-        console.log("Client not initialized.");
-        return done();
-    }
-
-    var index = inputArgs.index;
+    var index = 'index' in inputArgs ? inputArgs.index : -1;
     if (index < 0 || index >= nearbyPokemons.length) {
         console.log("[e] Error catching pokemon.");
         console.log("Invalid pokemon index.");
@@ -239,12 +262,6 @@ function capture(inputArgs, done) {
 }
 
 function showInventory(inputArgs, done) {
-    if (!initialized) {
-        console.log("[e] Error getting invenotry.");
-        console.log("Client not initialized.");
-        return done();
-    }
-
     var itemList = inputArgs.list;
 
     client.GetInventory(function (err, inventory) {
@@ -255,11 +272,12 @@ function showInventory(inputArgs, done) {
         }
 
         var itemArr = inventory.inventory_delta.inventory_items;
-        var pokemons = [];
-        var items = [];
-        var candies = [];
-        var pokedexEntries = []
-        var playerStats;
+        pokemons = [];
+        items = [];
+        candies = [];
+        pokedexEntries = []
+        playerStats;
+
         _.each(itemArr, function (element) {
             var data = element.inventory_item_data;
             if (data.pokemon && !data.pokemon.is_egg) {
@@ -292,15 +310,15 @@ function showInventory(inputArgs, done) {
 
             console.log("[i] You have the following Pokemons:");
             var table = new Table({
-                    head: ['#', 'Name', 'CP', 'Capture Date']
-                  , colWidths: [5, 14, 6, 42]
+                    head: ['i', '#', 'Name', 'CP', 'Capture Date']
+                  , colWidths: [5, 5, 14, 6, 42]
             });
-            _.each(pokemons, function (pokemon) {
+            _.each(pokemons, function (pokemon, index) {
                 var pokedexInfo = client.pokemonlist[parseInt(pokemon.pokemon_id)-1];
                 var timeObj = pokemon.creation_time_ms;
                 var int64 = new Int64(timeObj.high, timeObj.low);
                 var captureDate = new Date(int64.toNumber());
-                table.push([pokedexInfo.num, pokedexInfo.name, pokemon.cp, captureDate]);
+                table.push([index, pokedexInfo.num, pokedexInfo.name, pokemon.cp, captureDate]);
             });
             console.log(table.toString());
         } else if (itemList === 'items') {
@@ -325,5 +343,40 @@ function showInventory(inputArgs, done) {
         }
 
         return done();
+    });
+}
+
+function release(inputArgs, done) {
+    var index = 'index' in inputArgs ? inputArgs.index : -1;
+    if (index < 0 || index >= pokemons.length) {
+        console.log("[e] Error releasing pokemon.");
+        console.log("Invalid pokemon index.");
+        return done();
+    }
+
+    var pokemon = pokemons[index];
+    var timeObj = pokemon.creation_time_ms;
+    var int64 = new Int64(timeObj.high, timeObj.low);
+    var captureDate = new Date(int64.toNumber());
+    var pokedexInfo = client.pokemonlist[parseInt(pokemon.pokemon_id)-1];
+    console.log("[i] About to release:");
+    console.log(pokedexInfo.name + ", CP = " + pokemon.cp + ", Capture Date = " + captureDate);
+    yesno.ask("[!] Are you sure you want to continue?", false, function (ok) {
+        if (!ok) {
+            console.log("[i] Pokemon not released.");
+            return done();
+        }
+
+        var pokemonId = new Int64(pokemon.id.high, pokemon.id.low);
+        client.ReleasePokemon(pokemonId.toUnsignedDecimalString(), function (err, releaseData) {
+            if (err) {
+                console.log("[e] Error releasing pokemon.");
+                console.log(err);
+                return done();
+            }
+
+            console.log("[i] Bye bye " + pokedexInfo.name + "...");
+            return done();
+        });
     });
 }

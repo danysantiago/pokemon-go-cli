@@ -11,8 +11,9 @@
   "dependencies": {
     "async": "^2.0.1",
     "cli-table": "^0.3.1",
-    "node-int64": "^0.4.0",
+    "int64-native": "^0.4.0",
     "underscore": "^1.8.3",
-    "vorpal": "^1.11.2"
+    "vorpal": "^1.11.2",
+    "yesno": "0.0.1"
   }
 }
