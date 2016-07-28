@@ -18,6 +18,7 @@ var location = {
 };
 
 var nearbyPokemons = [];
+var nearbyPokeStops = [];
 var pokemons = [];
 var items = [];
 var candies = [];
@@ -95,6 +96,11 @@ vorpal
     .command("map")
     .description("Opens PokeVision with the current location.")
     .action(openMap);
+
+vorpal
+    .command("pokestop [index]")
+    .description("Get items from a Pokestop, or list the nearby Pokestops after a scan.")
+    .action(showPokestops);
 
 vorpal
     .delimiter('>')
@@ -187,24 +193,59 @@ function scan(inputArgs, done) {
         },
         client.Heartbeat,
         function (scan, callback) {
+            nearbyPokemons = [];
+            nearbyPokeStops = [];
             for (var i = scan.cells.length - 1; i >= 0; i--) {
                 if (scan.cells[i].NearbyPokemon[0]) {
                     var pokemon = client.pokemonlist[parseInt(scan.cells[i].NearbyPokemon[0].PokedexNumber)-1];
                     console.log('[+] There is a ' + pokemon.name + ' at ' + scan.cells[i].NearbyPokemon[0].DistanceMeters.toString() + ' meters');
                 }
-            }
 
-            var index = 0;
-            nearbyPokemons = [];
-            for (i = scan.cells.length - 1; i >= 0; i--) {
                 for (var j = scan.cells[i].WildPokemon.length - 1; j >= 0; j--) {
                     var currentPokemon = scan.cells[i].WildPokemon[j];
                     var pokedexInfo = client.pokemonlist[parseInt(currentPokemon.pokemon.PokemonId)-1];
                     nearbyPokemons.push({'pokemon': currentPokemon, 'pokedex': pokedexInfo});
-                    console.log('[' + index + '] There is a ' + pokedexInfo.name + ' near! I can try to catch it!');
-                    index++;
+                }
+
+                if (scan.cells[i].Fort[0]) {
+                    for (var j = scan.cells[i].Fort.length - 1; j >= 0; j--) {
+                        var fort = scan.cells[i].Fort[j];
+                        if (fort.FortType === 0) {
+                            // GYM
+                        } else if (fort.FortType === 1) {
+                            nearbyPokeStops.push(fort);
+                        }
+                    }
                 }
             }
+
+            nearbyPokeStops = _.sortBy(nearbyPokeStops, function (element) {
+                var lat1 = element.Latitude;
+                var lat2 = client.playerInfo.latitude;
+                var lon1 = element.Longitude;
+                var lon2 = client.playerInfo.longitude;
+
+                var R = 6371e3; // metres
+                var 𝛑 = 3.14159265359;
+                var φ1 = (lat1 * 𝛑) / 180;
+                var φ2 = (lat2 * 𝛑) / 180;
+                var Δφ = ((lat2-lat1) * 𝛑) / 180;
+                var Δλ = ((lon2-lon1) * 𝛑) / 180;
+
+                var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                        Math.cos(φ1) * Math.cos(φ2) *
+                        Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+                var d = R * c;
+
+                return element.distance = d;
+            });
+
+            _.each(nearbyPokemons, function (pokemon, index) {
+                var pokedexInfo = client.pokemonlist[parseInt(currentPokemon.pokemon.PokemonId)-1];
+                console.log('[' + index + '] There is a ' + pokedexInfo.name + ' near! I can try to catch it!');
+            });
 
             callback(null);
         }
@@ -433,4 +474,44 @@ function openMap(inputArgs, done) {
     var url = "https://pokevision.com/#/@";
     opn(url + client.playerInfo.latitude + ',' + client.playerInfo.longitude, {app: 'google chrome'});
     return done();
+}
+
+function showPokestops(inputArgs, done) {
+    if (!('index' in inputArgs)) {
+        _.each(nearbyPokeStops, function (fort, index) {
+            console.log("[" + index + "] There is a nearby PokeStop "
+                + Math.round(fort.distance) + " meters away at "
+                + fort.Latitude + "," + fort.Longitude);
+        });
+        return done();
+    }
+
+    var index = inputArgs.index;
+    if (index < 0 || index >= nearbyPokeStops.length) {
+        console.log("[e] Error getting Pokestop.");
+        console.log("Invalid pokemon index.");
+        return done();
+    }
+
+    var fort = nearbyPokeStops[index];
+    client.GetFort(fort.FortId, fort.Latitude, fort.Longitude, function (err, getData) {
+        if (err) {
+            console.log("[e] Error getting Pokestop.");
+            console.log(JSON.stringify(err));
+            return done();
+        }
+
+        if (getData.result != 1) {
+            var statusStr = ['unexpected error', 'success', 'out of range', 'too soon, still in cooldown period', 'your inventory is full'];
+            console.log("[e] Unable to get items from Pokestop, " + statusStr[getData.result] + ".");
+            return done();
+        }
+
+        console.log("Got the following items:");
+        _.each(getData.items_awarded, function (item) {
+            console.log(client.itemMap[item.item_id].name + " x" + item.item_count);
+        });
+
+        return done();
+    });
 }
