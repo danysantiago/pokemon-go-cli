@@ -14,7 +14,7 @@ var initialized = false;
 
 var location = {
     'type': 'name',
-    'name': 'Oakland'
+    'name': 'Fremont'
 };
 
 var nearbyPokemons = [];
