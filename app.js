@@ -61,23 +61,29 @@ vorpal
 
 vorpal
     .command("scan [lat_lon]")
-    .description("Scan for nearby Pokemons. Catchable Pokemons will contain an index to use with the catch command.")
+    .description("Scan for nearby Pokemons."
+        + "\nCatchable Pokemons will contain an index to use with the catch command.")
     .action(scan);
 
 vorpal
-    .command("catch [index]")
-    .description("Tries to capture previously seen nearby Pokemon while scanning.")
+    .command("catch <index> [pokeball_id]")
+    .description("Tries to capture previously seen nearby Pokemon while scanning."
+        + "\nUse the scan command to get the index of the Pokemon to catch."
+        + "\nUse the pokeball_id param to specify the Pokeball to use. Valid ids are: 1 = Pokeball, 2 = Great Ball, 3 = Ultra Ball, 4 = Master Ball.")
     .action(capture);
 
 vorpal
-    .command("inventory <list> [sortBy]")
+    .command("inventory <list> [sort_by]")
     .alias('inv')
-    .description("Displays user Pokemons, Items, Candies or Stats. You can sort the Pokemon list by utilizing the 'sortBy' param and one of the followings: '#', 'cp', 'name' or 'recent'.")
+    .description("Displays user Pokemons, Items, Candies or Stats."
+        + "\nYou can sort the Pokemon list by utilizing the 'sort_by' param and one of the followings: '#', 'cp', 'name' or 'recent'."
+        + "\nYou can sort the Candies list by utilizing the 'sort_by' param and one of the followings: 'name'.")
     .action(showInventory);
 
 vorpal
-    .command("release [index]")
-    .description("Transfers a Pokemon for candy.")
+    .command("release <index>")
+    .description("Transfers a Pokemon for candy."
+        + "\nUse the inventory command to get the index of the Pokemon to release.")
     .action(release);
 
 vorpal
@@ -220,6 +226,13 @@ function capture(inputArgs, done) {
         return done();
     }
 
+    var pokeball = inputArgs.pokeball_id || 1;
+    if (pokeball < 1 || pokeball > 4) {
+        console.log("[e] Error catching pokemon.");
+        console.log("Invalid pokeball id.");
+        return done();
+    }
+
     var pokemonToCatch = nearbyPokemons[index].pokemon;
     var pokemonToCatchInfo = nearbyPokemons[index].pokedex;
 
@@ -246,8 +259,10 @@ function capture(inputArgs, done) {
 
             async.doUntil(
                 function (doUntilFnCallback) {
-                    console.log('[i] Trying to catch pokemon ' + pokemonToCatchInfo.name + '...');
-                    client.CatchPokemon(pokemonToCatch, 1, 1.950, 1, 1, doUntilFnCallback);
+                    setTimeout(function () { // Delay the catch reuqest to avoid failed attempts too quick.
+                        console.log('[i] Trying to catch pokemon ' + pokemonToCatchInfo.name + '...');
+                        client.CatchPokemon(pokemonToCatch, 1, 1.950, 1, pokeball, doUntilFnCallback);
+                    }, 2000);  
                 },
                 function (catchResult) {
                     var statusStr = ['Unexpected error', 'Successful catch', 'Catch Escape', 'Catch Flee', 'Missed Catch'];
@@ -260,7 +275,7 @@ function capture(inputArgs, done) {
         }
     ], function (err) {
         if (err) {
-            console.log("[e] Error catching scanning.");
+            console.log("[e] Error catching pokemon.");
             console.log(JSON.stringify(err));
         }
 
@@ -299,7 +314,7 @@ function showInventory(inputArgs, done) {
         });
 
         if (itemList === 'pokemons') {
-            var sortBy = inputArgs.sortBy;
+            var sortBy = inputArgs.sort_by;
             if (sortBy === "cp") {
                 pokemons = _.sortBy(pokemons, 'cp');
             } else if (sortBy === "#") {
@@ -350,7 +365,15 @@ function showInventory(inputArgs, done) {
             console.log("[i] " + playerStats.unique_pokedex_entries + " Unique Pokedex Entries.");
             console.log("[i] " + playerStats.pokemons_captured + " Pokemons captured.");
         } else if (itemList === 'candies') {
-            candies = _.sortBy(candies, 'family_id');
+            var sortBy = inputArgs.sort_by;
+            if (sortBy === "name") {
+                candies = _.sortBy(candies, function (element) {
+                    var pokedexInfo = client.pokemonlist[parseInt(element.family_id)-1];
+                    return pokedexInfo.name;
+                });
+            } else {
+                candies = _.sortBy(candies, 'family_id');
+            }
 
             console.log("[i] You have the following Candy:");
             var table = new Table({
