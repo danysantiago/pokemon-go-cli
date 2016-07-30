@@ -14,8 +14,16 @@ var initialized = false;
 
 var location = {
     'type': 'name',
-    'name': 'Fremont'
+    'name': 'Oakland'
 };
+
+// var location = {
+//     'type': 'coords',
+//     'coords': {
+//         'latitude': 0,
+//         'longitude': 0
+//     }
+// }
 
 var nearbyPokemons = [];
 var nearbyPokeStops = [];
@@ -99,13 +107,32 @@ vorpal
 
 vorpal
     .command("pokestop [index]")
-    .description("Get items from a Pokestop, or list the nearby Pokestops after a scan.")
+    .option("-t, --travel", "Travels to the Poksetop before attempting to gather items.")
+    .description("Get items from a Pokestop, or list the nearby Pokestops after a scan if no index is proivded.")
     .action(showPokestops);
 
 vorpal
     .delimiter('>')
     .show()
     .exec('init');
+
+function distanceCoords(lat1, lat2, lon1, lon2) {
+    var R = 6371e3; // metres
+    var pi = 3.14159265359;
+    var φ1 = (lat1 * pi) / 180;
+    var φ2 = (lat2 * pi) / 180;
+    var Δφ = ((lat2-lat1) * pi) / 180;
+    var Δλ = ((lon2-lon1) * pi) / 180;
+
+    var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+        Math.cos(φ1) * Math.cos(φ2) *
+        Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+    var d = R * c;
+
+    return d;
+}
 
 function init(success) {
     return function (inputArgs) {
@@ -224,27 +251,11 @@ function scan(inputArgs, done) {
                 var lat2 = client.playerInfo.latitude;
                 var lon1 = element.Longitude;
                 var lon2 = client.playerInfo.longitude;
-
-                var R = 6371e3; // metres
-                var 𝛑 = 3.14159265359;
-                var φ1 = (lat1 * 𝛑) / 180;
-                var φ2 = (lat2 * 𝛑) / 180;
-                var Δφ = ((lat2-lat1) * 𝛑) / 180;
-                var Δλ = ((lon2-lon1) * 𝛑) / 180;
-
-                var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                        Math.cos(φ1) * Math.cos(φ2) *
-                        Math.sin(Δλ/2) * Math.sin(Δλ/2);
-                var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-                var d = R * c;
-
-                return element.distance = d;
+                return element.distance = distanceCoords(lat1, lat2, lon1, lon2);
             });
 
             _.each(nearbyPokemons, function (pokemon, index) {
-                var pokedexInfo = client.pokemonlist[parseInt(currentPokemon.pokemon.PokemonId)-1];
-                console.log('[' + index + '] There is a ' + pokedexInfo.name + ' near! I can try to catch it!');
+                console.log('[' + index + '] There is a ' + pokemon.pokedex.name + ' near! I can try to catch it!');
             });
 
             callback(null);
