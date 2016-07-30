@@ -12,18 +12,20 @@ const client = new PokemonGO.Pokeio();
 var debug = false;
 var initialized = false;
 
-var location = {
-    'type': 'name',
-    'name': 'Oakland'
-};
-
 // var location = {
-//     'type': 'coords',
-//     'coords': {
-//         'latitude': 0,
-//         'longitude': 0
-//     }
-// }
+//     'type': 'name',
+//     'name': 'London'
+// };
+
+var location = {
+    'type': 'coords',
+    'coords': {
+        'latitude': 51.50304279101565,
+        'longitude': -0.12963652610778809
+    }
+}
+
+var coordsRegEx = /^(\-?\d+(\.\d+)?)\s?,\s?(\-?\d+(\.\d+)?)$/;
 
 var nearbyPokemons = [];
 var nearbyPokeStops = [];
@@ -55,6 +57,11 @@ vorpal
                     type: 'password',
                     name: 'password',
                     message: 'Password: '
+                },
+                {
+                    type: 'input',
+                    name: 'initLocation',
+                    message: 'Initial Location: '
                 }
             ], init(doUntilFnCallback));
         }, function (success) {
@@ -134,6 +141,20 @@ function distanceCoords(lat1, lat2, lon1, lon2) {
     return d;
 }
 
+function parseCoordsString(string) {
+    var commaSplit = string.split(',');
+    var latitude = commaSplit[0].trim();
+    var longitude = commaSplit[1].trim();
+    return location = {
+        'type': 'coords',
+        'coords': {
+            'latitude': parseFloat(latitude),
+            'longitude': parseFloat(longitude),
+            'altitude': 0
+        }
+    }    
+}
+
 function init(success) {
     return function (inputArgs) {
         var username = inputArgs.username;
@@ -141,10 +162,14 @@ function init(success) {
         var provider = inputArgs.provider;
 
         if (inputArgs.initLocation) {
-            location = {
-                'type': 'name',
-                'name': inputArgs.initLocation
-            };
+            if (coordsRegEx.test(inputArgs.initLocation)) {
+                parseCoordsString(inputArgs.initLocation);
+            } else {
+                location = {
+                    'type': 'name',
+                    'name': inputArgs.initLocation
+                };  
+            }
         }
 
         client.init(username, password, location, provider, function (err) {
@@ -194,24 +219,12 @@ function scan(inputArgs, done) {
                 return callback(null, location);;
             }
 
-            try {
-                var commaSplit = inputArgs.lat_lon.split(',');
-                var latitude = commaSplit[0].trim();
-                var longitude = commaSplit[1].trim();
-                location = {
-                    'type': 'coords',
-                    'coords': {
-                        'latitude': parseFloat(latitude),
-                        'longitude': parseFloat(longitude),
-                        'altitude': 0
-                    }
-                }
-
-                return callback(null, location);
-            } catch (err) {
-                callback("Wrong scan location format. Try 'scan 37.7749,-122.4194'");
-                return;
+            if (!coordsRegEx.test(inputArgs.lat_lon)) {
+                return callback("Wrong scan location format. Try 'scan 37.7749,-122.4194'");
             }
+
+            location = parseCoordsString(inputArgs.lat_lon);
+            return callback(null, location);
         },
         client.SetLocation,
         function (newLocation, callback) {
@@ -234,25 +247,26 @@ function scan(inputArgs, done) {
                     nearbyPokemons.push({'pokemon': currentPokemon, 'pokedex': pokedexInfo});
                 }
 
-                if (scan.cells[i].Fort[0]) {
-                    for (var j = scan.cells[i].Fort.length - 1; j >= 0; j--) {
-                        var fort = scan.cells[i].Fort[j];
-                        if (fort.FortType === 0) {
-                            // GYM
-                        } else if (fort.FortType === 1) {
+
+                for (var j = scan.cells[i].Fort.length - 1; j >= 0; j--) {
+                    var fort = scan.cells[i].Fort[j];
+                    if (fort.FortType === 0) {
+                        // GYM
+                    } else if (fort.FortType === 1) {
+                        // Pokestop
+                        var lat1 = fort.Latitude;
+                        var lat2 = client.playerInfo.latitude;
+                        var lon1 = fort.Longitude;
+                        var lon2 = client.playerInfo.longitude;
+                        fort.distance = distanceCoords(lat1, lat2, lon1, lon2);
+                        if (fort.distance < 200) {
                             nearbyPokeStops.push(fort);
                         }
                     }
                 }
             }
 
-            nearbyPokeStops = _.sortBy(nearbyPokeStops, function (element) {
-                var lat1 = element.Latitude;
-                var lat2 = client.playerInfo.latitude;
-                var lon1 = element.Longitude;
-                var lon2 = client.playerInfo.longitude;
-                return element.distance = distanceCoords(lat1, lat2, lon1, lon2);
-            });
+            nearbyPokeStops = _.sortBy(nearbyPokeStops, 'distance');
 
             _.each(nearbyPokemons, function (pokemon, index) {
                 console.log('[' + index + '] There is a ' + pokemon.pokedex.name + ' near! I can try to catch it!');
