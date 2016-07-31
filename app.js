@@ -215,7 +215,8 @@ function scan(inputArgs, done) {
         function (callback) {
             var newScanTime = new Date();
             if (Math.abs(newScanTime - lastScanTime) < minTimeBetweenScans) {
-                return callback("Scan too quick, time between scans must be at least 5 seconds.");
+                return callback("Scan too quick, time between scans must be at least "
+                    + Math.round(minTimeBetweenScans/1000) + " seconds.");
             }
 
             lastScanTime = newScanTime;
