@@ -11,19 +11,13 @@ const client = new PokemonGO.Pokeio();
 
 var debug = false;
 var initialized = false;
-
-// var location = {
-//     'type': 'name',
-//     'name': 'London'
-// };
+const MIN_TIME_BETWEEN_SCANS = 5000;
+var lastScanTime = new Date();
 
 var location = {
-    'type': 'coords',
-    'coords': {
-        'latitude': 51.50304279101565,
-        'longitude': -0.12963652610778809
-    }
-}
+    'type': 'name',
+    'name': 'London'
+};
 
 var coordsRegEx = /^(\-?\d+(\.\d+)?)\s?,\s?(\-?\d+(\.\d+)?)$/;
 
@@ -91,6 +85,7 @@ vorpal
 vorpal
     .command("inventory <list> [sort_by]")
     .alias('inv')
+    .autocomplete(['pokemons', 'items', 'candies', 'stats'])
     .description("Displays user Pokemons, Items, Candies or Stats."
         + "\nYou can sort the Pokemon list by utilizing the 'sort_by' param and one of the followings: '#', 'cp', 'name' or 'recent'."
         + "\nYou can sort the Candies list by utilizing the 'sort_by' param and one of the followings: 'name'.")
@@ -215,6 +210,13 @@ function showProfile(inputArgs, done) {
 function scan(inputArgs, done) {
     async.waterfall([
         function (callback) {
+            var newScanTime = new Date();
+            if (Math.abs(newScanTime - lastScanTime) < MIN_TIME_BETWEEN_SCANS) {
+                return callback("Scan too quick, time between scans must be at least 5 seconds.");
+            }
+
+            lastScanTime = newScanTime;
+
             if (!('lat_lon' in inputArgs)) {
                 return callback(null, location);;
             }
@@ -238,7 +240,7 @@ function scan(inputArgs, done) {
             for (var i = scan.cells.length - 1; i >= 0; i--) {
                 if (scan.cells[i].NearbyPokemon[0]) {
                     var pokemon = client.pokemonlist[parseInt(scan.cells[i].NearbyPokemon[0].PokedexNumber)-1];
-                    console.log('[+] There is a ' + pokemon.name + ' at ' + scan.cells[i].NearbyPokemon[0].DistanceMeters.toString() + ' meters');
+                    console.log('[+] There is a ' + pokemon.name + ' nearby.');
                 }
 
                 for (var j = scan.cells[i].WildPokemon.length - 1; j >= 0; j--) {
@@ -303,20 +305,31 @@ function capture(inputArgs, done) {
     var pokemonToCatchInfo = nearbyPokemons[index].pokedex;
 
     async.waterfall([
-        client.Heartbeat,
-        function (scan, callback) {
-            for (i = scan.cells.length - 1; i >= 0; i--) {
-                for (var j = scan.cells[i].WildPokemon.length - 1; j >= 0; j--) {
-                    var currentPokemon = scan.cells[i].WildPokemon[j];
-                    if (JSON.stringify(currentPokemon.EncounterId) === JSON.stringify(pokemonToCatch.EncounterId)) {
-                        pokemonToCatch = currentPokemon;
-                        callback(null, currentPokemon);
-                        return;
+        function (callback) {
+            client.Heartbeat(function (err, scan) {
+                if (err) {
+                    return callback(err);
+                }
+
+                // Last scan was done less fairly recent, we are good to start encounter.
+                if (Math.abs(new Date() - lastScanTime) < MIN_TIME_BETWEEN_SCANS) {
+                    return callback(null, pokemonToCatch);
+                }
+
+                // Last scan was done some time ago, re-scan and confirm pokemon still present.
+                for (i = scan.cells.length - 1; i >= 0; i--) {
+                    for (var j = scan.cells[i].WildPokemon.length - 1; j >= 0; j--) {
+                        var currentPokemon = scan.cells[i].WildPokemon[j];
+                        if (JSON.stringify(currentPokemon.EncounterId) === JSON.stringify(pokemonToCatch.EncounterId)) {
+                            pokemonToCatch = currentPokemon;
+                            callback(null, currentPokemon);
+                            return;
+                        }
                     }
                 }
-            }
 
-            callback("Pokemon " + pokemonToCatchInfo.name + " seem to have disappear.");
+                callback("Pokemon " + pokemonToCatchInfo.name + " seem to have disappear.");
+            });
         },
         client.EncounterPokemon,
         function (encounterData, callback) {
@@ -414,12 +427,14 @@ function showInventory(inputArgs, done) {
         } else if (itemList === 'items') {
             console.log("[i] You have the following Items:");
             var table = new Table({
-                head: ['Name', 'Count'],
-                colWidths: [28, 8]
+                head: ['Id', 'Name', 'Count'],
+                colWidths: [8, 28, 8]
             });
+            items = _.sortBy(items, 'item');
             _.each(items, function (item) {
                 if (item.count) {
-                    table.push([client.itemMap[item.item].name, item.count]);
+                    var itemInfo = client.itemMap[item.item];
+                    table.push([item.item, itemInfo.name, item.count]);
                 }
             });
             console.log(table.toString());
