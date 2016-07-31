@@ -11,7 +11,7 @@ const client = new PokemonGO.Pokeio();
 
 var debug = false;
 var initialized = false;
-const MIN_TIME_BETWEEN_SCANS = 5000;
+var minTimeBetweenScans;
 var lastScanTime = new Date();
 
 var location = {
@@ -175,9 +175,12 @@ function init(success) {
             }
 
             initialized = true;
+            console.log('[i] Get Map Objects Min Refresh Seconds: ' + client.settings.map_settings.get_map_objects_min_refresh_seconds);
             console.log('[i] Current location: ' + client.playerInfo.locationName);
-            console.log('[i] lat/long/alt: : ' + client.playerInfo.latitude + ' ' + client.playerInfo.longitude + ' ' + client.playerInfo.altitude);
-        
+            console.log('[i] lat/long/alt: ' + client.playerInfo.latitude + ' ' + client.playerInfo.longitude + ' ' + client.playerInfo.altitude);
+
+            minTimeBetweenScans = client.settings.map_settings.get_map_objects_min_refresh_seconds * 1000;
+
             return success(null, true);
         });
     }
@@ -211,7 +214,7 @@ function scan(inputArgs, done) {
     async.waterfall([
         function (callback) {
             var newScanTime = new Date();
-            if (Math.abs(newScanTime - lastScanTime) < MIN_TIME_BETWEEN_SCANS) {
+            if (Math.abs(newScanTime - lastScanTime) < minTimeBetweenScans) {
                 return callback("Scan too quick, time between scans must be at least 5 seconds.");
             }
 
@@ -312,7 +315,7 @@ function capture(inputArgs, done) {
                 }
 
                 // Last scan was done less fairly recent, we are good to start encounter.
-                if (Math.abs(new Date() - lastScanTime) < MIN_TIME_BETWEEN_SCANS) {
+                if (Math.abs(new Date() - lastScanTime) < minTimeBetweenScans) {
                     return callback(null, pokemonToCatch);
                 }
 
