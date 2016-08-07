@@ -145,7 +145,7 @@ function parseCoordsString(string) {
         'coords': {
             'latitude': parseFloat(latitude),
             'longitude': parseFloat(longitude),
-            'altitude': 0
+            'altitude': Math.random() * (18 - 8) + 8
         }
     }    
 }
@@ -437,8 +437,8 @@ function showInventory(inputArgs, done) {
             items = _.sortBy(items, 'item');
             _.each(items, function (item) {
                 if (item.count) {
-                    var itemInfo = client.itemMap[item.item];
-                    table.push([item.item, itemInfo.name, item.count]);
+                    var itemInfo = client.itemMap[item.item_id];
+                    table.push([item.item_id, itemInfo.name, item.count]);
                 }
             });
             console.log(table.toString());
